@@ -1,4 +1,4 @@
-const { MyPromise } = require('./MyPromise.js');
+const MyPromise = require('./MyPromise.js');
 const request = require('request');
 
 
