@@ -55,11 +55,11 @@ function MyPromise(fn) {
 }
 
 /**
- * promise解决过程
- * @param {MyPromise} promise 
+ * promise解决过程，将回调函数返回值x与新promise实例进行绑定，使得新promise实例能通过then访问到返回值x
+ * @param {MyPromise} promise // 新创建的promise实例
  * @param {*} x // 回调函数返回值
- * @param {Function} resolve 
- * @param {Function} reject 
+ * @param {Function} resolve // 新promise实例的resolve函数
+ * @param {Function} reject // 新promise实例的reject函数
  * @returns 
  */
 function resolvePromise(promise, x, resolve, reject) {
@@ -74,6 +74,7 @@ function resolvePromise(promise, x, resolve, reject) {
         // 如果 x 为 Promise ，则使 promise 接受 x 的状态
         // 也就是继续执行x，如果执行的时候拿到一个y，还要继续解析y
         // 这个if跟下面判断then然后拿到执行其实重复了，可有可无
+        // 这里的x.then其实是MyPromise.prototype.then的一次递归调用（在函数定义时就调用本函数）
         x.then(function (y) {
             resolvePromise(promise, y, resolve, reject);
         }, reject);
@@ -82,6 +83,7 @@ function resolvePromise(promise, x, resolve, reject) {
     else if (typeof x === 'object' || typeof x === 'function') {
         // 这个坑是跑测试的时候发现的，如果x是null，应该直接resolve
         if (x === null) {
+            // 由于闭包的存在，在此处调用函数可以修改promise2的status和value
             return resolve(x);
         }
 
@@ -90,32 +92,35 @@ function resolvePromise(promise, x, resolve, reject) {
             var then = x.then;
         } catch (error) {
             // 如果取 x.then 的值时抛出错误 e ，则以 e 为据因拒绝 promise
+            // 同理，修改promise2的status和value
             return reject(error);
         }
 
         // 如果 then 是函数
         if (typeof then === 'function') {
-            // 定义变量标记回调是否发生
+            // 定义变量标记回调是否发生。作用是什么？
             var called = false;
             // 将 x 作为函数的作用域 this 调用之
             // 传递两个回调函数作为参数，第一个参数叫做 resolvePromise ，第二个参数叫做 rejectPromise
             // 名字重名了，我直接用匿名函数了
             try {
+                // 同理，此处也为递归调用
+                // 如果返回值不普通（是个promise），则继续调用then以获取其promise中包含的solve值
                 then.call(
                     x,
-                    // 如果 resolvePromise 以值 y 为参数被调用，则运行 [[Resolve]](promise, y)
+                    // 假设这个promise是成功的
                     function (y) {
-                        // 如果 resolvePromise 和 rejectPromise 均被调用，
-                        // 或者被同一参数调用了多次，则优先采用首次调用并忽略剩下的调用
-                        // 实现这条需要前面加一个变量called
+                        // 那么y就是resolve的值
                         if (called) return;
                         called = true;
+                        // 重新尝试将该值与promise绑定
                         resolvePromise(promise, y, resolve, reject);
                     },
                     // 如果 rejectPromise 以据因 r 为参数被调用，则以据因 r 拒绝 promise
                     function (r) {
                         if (called) return;
                         called = true;
+                        // 失败则直接绑定错误结果即可
                         reject(r);
                     });
             } catch (error) {
@@ -132,15 +137,18 @@ function resolvePromise(promise, x, resolve, reject) {
         }
     } else {
         // 如果 x 不为对象或者函数，以 x 为参数执行 promise
+        // 如果是普通的值，直接resolve将值传递给目标promise即可
         resolve(x);
     }
 }
 
 /**
- * promise的then方法，接收两个函数作为参数，在promise状态转为fulfilled或者rejected时分别调用
+ * promise的then方法
+ * 1. 将resolve的值传递给onFullfilled
+ * 2. 获取onFullfilled可能的返回值，并将其作为新promise的resolve的值，并返回新promise
  * @param {*} onFullfilled 
  * @param {*} onRejected 
- * @returns {MyPromise}
+ * @returns {MyPromise} 
  */
 MyPromise.prototype.then = function (onFullfilled, onRejected) {
     // 如果 onFullfilled 不是函数，将其转换为函数
@@ -179,13 +187,17 @@ MyPromise.prototype.then = function (onFullfilled, onRejected) {
     // 如果在执行then方法时，promise已经处于rejected状态，返回一个新的promise
     if (this.status === REJECTED) {
         let promise2 = new MyPromise((resolve, reject) => {
-            // 使用宏任务，确保onRejected在当前任务执行完毕后执行
+            // 使用宏任务，确保promise2已经完成初始化
             setTimeout(() => {
                 //onRejected、resolvePromise均可能抛出错误
                 try {
                     // 获取onRejected的返回值，并运行promise解决过程
                     let x = onRejected(this.reason);
-                    resolvePromise(promise2, x, resolve, reject);
+                    // 在promise内部调用，确保能使用resolve和reject函数
+                    resolvePromise(promise2, x, resolve, reject); // 为什么在这里能够访问到promise2？
+                    // 解释：因为在new MyPeomise时，setTimeout中的回调函数并没有立即被执行，
+                    // 而是被放入了宏任务队列中，当回调函数被取出执行时，promise2已经创建完成
+                    // 同时函数被定义时有闭包，因此可以访问到promise2
                 } catch (error) {
                     reject(error);
                 }
