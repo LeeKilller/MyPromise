@@ -30,3 +30,21 @@ promise2.then(function (value) {
     console.log(reason);
 });
 
+
+
+
+let map = new Map([
+    ['key1','vlaue1']
+])
+
+map.set('key2','value2');
+
+
+
+let p = MyPromise.all(Array(8).fill(0))
+
+console.log(p);
+
+p.then((res)=>{
+    console.log(res);
+})

@@ -102,7 +102,6 @@ function resolvePromise(promise, x, resolve, reject) {
             var called = false;
             // 将 x 作为函数的作用域 this 调用之
             // 传递两个回调函数作为参数，第一个参数叫做 resolvePromise ，第二个参数叫做 rejectPromise
-            // 名字重名了，我直接用匿名函数了
             try {
                 // 同理，此处也为递归调用
                 // 如果返回值不普通（是个promise），则继续调用then以获取其promise中包含的solve值
@@ -143,7 +142,7 @@ function resolvePromise(promise, x, resolve, reject) {
 }
 
 /**
- * promise的then方法
+ * promise的then方法，其作用为：
  * 1. 将resolve的值传递给onFullfilled
  * 2. 获取onFullfilled可能的返回值，并将其作为新promise的resolve的值，并返回新promise
  * @param {*} onFullfilled 
@@ -178,7 +177,7 @@ MyPromise.prototype.then = function (onFullfilled, onRejected) {
                 } catch (error) {
                     reject(error);
                 }
-            },0)
+            }, 0)
         })
 
         return promise2;
@@ -201,7 +200,7 @@ MyPromise.prototype.then = function (onFullfilled, onRejected) {
                 } catch (error) {
                     reject(error);
                 }
-            },0)
+            }, 0)
         })
 
         return promise2;
@@ -223,7 +222,7 @@ MyPromise.prototype.then = function (onFullfilled, onRejected) {
                     } catch (error) {
                         reject(error);
                     }
-                },0)
+                }, 0)
             })
             this.onRejectedCallback.push(() => {
                 setTimeout(() => {
@@ -238,7 +237,7 @@ MyPromise.prototype.then = function (onFullfilled, onRejected) {
                     } catch (error) {
                         reject(error);
                     }
-                },0)
+                }, 0)
             })
         })
 
@@ -246,17 +245,118 @@ MyPromise.prototype.then = function (onFullfilled, onRejected) {
     }
 }
 
+
+MyPromise.resolve = function (parameter) {
+    if (parameter instanceof MyPromise) return parameter;
+
+    return new MyPromise((res) => {
+        res(parameter);
+    })
+}
+
+MyPromise.reject = function (reason) {
+    return new MyPromise((res, rej) => {
+        rej(reason);
+    })
+}
+
+
+MyPromise.all = function (iterator) {
+    let type = typeof iterator;
+    if (type !== 'object') {
+        throw TypeError(type + ' is not iterable.');
+    }
+
+    type = Object.prototype.toString.call(iterator).slice(8, -1).toLowerCase();
+
+    if (type === 'object') {
+        throw TypeError(type + ' is not iterable.');
+    }
+
+    console.log(type);
+
+    return new MyPromise((resolve, reject) => {
+        let count = 0;
+        const result = [];
+        if (type === 'map') {
+            if(iterator.size === 0) resolve([]);
+            for (const [key, value] of iterator) {
+                MyPromise.resolve(value).then((res) => {
+                    result.push(res);
+                    count++;
+                    if (count === iterator.size) resolve(result);
+                },
+                    (err) => {
+                        reject(err);
+                    })
+            }
+        } else {
+            const arr = Array.from(iterator);
+            if(arr.length === 0) resolve([]);
+            for (const value of arr) {
+                MyPromise.resolve(value).then((res) => {
+                    result.push(res);
+                    count++;
+                    if(count === arr.length) resolve(result);
+                },
+                (err)=>{
+                    reject(err);
+                })
+            }
+        }
+    })
+}
+
+
+MyPromise.race = function(iterator){
+    let type = typeof iterator;
+    if (type !== 'object') {
+        throw TypeError(type + ' is not iterable.');
+    }
+
+    type = Object.prototype.toString.call(iterator).slice(8, -1).toLowerCase();
+
+    if (type === 'object') {
+        throw TypeError(type + ' is not iterable.');
+    }
+    
+    return new MyPromise((resolve,reject)=>{
+        if(Array.from(iterator).length === 0) resolve();
+        if(type === 'map'){
+            for (const [key,value] of iterator) {
+                MyPromise.resolve(value).then((res)=>{
+                    resolve(res);
+                },
+                (err)=>{
+                    reject(err);
+                })
+            }
+        }
+        else {
+            for (const value of iterator) {
+                MyPromise.resolve(value).then((res)=>{
+                    resolve(res);
+                },
+                (err)=>{
+                    reject(err);
+                })
+            }
+        }
+    })
+
+}
+
 // 检测用代码
-MyPromise.deferred = function() {
+MyPromise.deferred = function () {
     var result = {};
-    result.promise = new MyPromise(function(resolve, reject){
-      result.resolve = resolve;
-      result.reject = reject;
+    result.promise = new MyPromise(function (resolve, reject) {
+        result.resolve = resolve;
+        result.reject = reject;
     });
-  
+
     return result;
-  }
-  
+}
+
 
 module.exports = MyPromise;
 
